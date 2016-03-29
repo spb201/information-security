@@ -11,12 +11,8 @@ import qualified Data.ByteString.Lazy.Char8 as C
 
 data Mode = Mode1 | Mode2 | Mode3 | Mode4
 type Digest = (Word32, Word32, Word32, Word32)
-type Operations =
-    ( Digest -> Word32
-    , Digest -> Word32
-    , Digest -> Word32
-    , Digest -> Word32
-    )
+type Operation = Digest -> Word32
+type Operations = (Operation, Operation, Operation, Operation)
 
 
 -- HASH
@@ -41,7 +37,7 @@ hash mode input =
     mainLoop wordArray (a, b, c, d) i =
         (d, a', b, c)
       where
-        f = operationResult operations' i (a, b, c, d)
+        f = applyOperation operations' i (a, b, c, d)
         k = constants ! i
         word = wordArray ! wordIndex i
         rotateAmount = rotateAmounts ! i
@@ -55,25 +51,31 @@ md5 = hash Mode1
 
 fancyPad :: B.ByteString -> B.ByteString
 fancyPad message =
-    B.append paddedMessage originalLengthBytes
+    B.append paddedMessage originalLengthByteString
   where
-    paddedMessage = rightPadBytes' 64 56 . B.snoc message $ 0x80
-    originalLengthBytes =
-        rightPadBytes 8 . B.take 8 . toByteString $ B.length message * 8
+    messageWithBitAdded = B.snoc message 0x80
+    paddedMessage = rightPadByteString' 64 56 messageWithBitAdded
+    lengthInBits = B.length message * 8
+    originalLengthByteString =
+        rightPadByteString 8 . B.take 8 . toByteString $ lengthInBits
 
 
-rightPadBytes :: Int64 -> B.ByteString -> B.ByteString
-rightPadBytes finalLength message
+rightPadByteString :: Int64 -> B.ByteString -> B.ByteString
+rightPadByteString finalLength message
     | messagePadded = message
-    | otherwise     = rightPadBytes finalLength . B.snoc message $ 0x00
-  where messagePadded = B.length message >= finalLength
+    | otherwise     = rightPadByteString finalLength paddingResult
+  where
+    messagePadded = B.length message >= finalLength
+    paddingResult = B.snoc message 0x00
 
 
-rightPadBytes' :: Int64 -> Int64 -> B.ByteString -> B.ByteString
-rightPadBytes' divisor remainder message
+rightPadByteString' :: Int64 -> Int64 -> B.ByteString -> B.ByteString
+rightPadByteString' divisor remainder message
     | messagePadded = message
-    | otherwise     = rightPadBytes' divisor remainder . B.snoc message $ 0x00
-  where messagePadded = B.length message `mod` divisor == remainder
+    | otherwise     = rightPadByteString' divisor remainder paddingResult
+  where
+    messagePadded = B.length message `mod` divisor == remainder
+    paddingResult = B.snoc message 0x00
 
 -- BREAKING MESSAGE
 
@@ -88,25 +90,25 @@ toByteString =
 
 
 splitToChunks :: B.ByteString -> [B.ByteString]
-splitToChunks = splitEveryBytes 64
+splitToChunks = splitEveryByteString 64
 
 
 breakChunk :: B.ByteString -> Array Int Word32
 breakChunk chunk =
-    listArray (0, 15) . map bytesToWord32 $ byteWords
+    listArray (0, 15) . map byteStringToWord32 $ byteWords
   where
-    byteWords = splitEveryBytes 4 chunk
+    byteWords = splitEveryByteString 4 chunk
 
 
-splitEveryBytes :: Int -> B.ByteString -> [B.ByteString]
-splitEveryBytes n string
+splitEveryByteString :: Int -> B.ByteString -> [B.ByteString]
+splitEveryByteString n string
     | B.null string = []
-    | otherwise     = first : splitEveryBytes n second
+    | otherwise     = first : splitEveryByteString n second
   where (first, second) = B.splitAt (fromIntegral n) string
 
 
-bytesToWord32 :: B.ByteString -> Word32
-bytesToWord32 =
+byteStringToWord32 :: B.ByteString -> Word32
+byteStringToWord32 =
     B.foldr foldingFunction 0
   where
     foldingFunction byte acc = shift acc 8 + fromIntegral byte
@@ -136,10 +138,10 @@ constants = array (0, 63)
 
 operations :: Operations
 operations =
-    ( (\(_, b, c, d) -> (b .&. c) .|. ((complement b) .&. d))
-    , (\(_, b, c, d) -> (d .&. b) .|. ((complement d) .&. c))
-    , (\(_, b, c, d) -> b `xor` c `xor` d)
-    , (\(_, b, c, d) -> c `xor` (b .|. (complement d)))
+    ( \(_, b, c, d) -> (b .&. c) .|. ((complement b) .&. d)
+    , \(_, b, c, d) -> (d .&. b) .|. ((complement d) .&. c)
+    , \(_, b, c, d) -> b `xor` c `xor` d
+    , \(_, b, c, d) -> c `xor` (b .|. (complement d))
     )
 
 
@@ -150,12 +152,12 @@ getOperations Mode3 (f, g, h, k) = (h, k, f, g)
 getOperations Mode4 (f, g, h, k) = (k, f, g, h)
 
 
-operationResult :: Operations -> Int -> Digest -> Word32
-operationResult (f, g, h, k) i digest
-    | i < 16    = f digest
-    | i < 32    = g digest
-    | i < 48    = h digest
-    | otherwise = k digest
+applyOperation :: Operations -> Int -> Digest -> Word32
+applyOperation (f, g, h, k) i
+    | i < 16    = f
+    | i < 32    = g
+    | i < 48    = h
+    | otherwise = k
 
 
 wordIndex :: Int -> Int
