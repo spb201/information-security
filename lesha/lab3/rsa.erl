@@ -25,7 +25,6 @@ decrypt(Size, Key1, Key2, Bin) ->
     Size1 = Size-1,
     Y = Size - (bit_size(Bin) rem Size),
     FileBlockified = [ A || <<A:Size>> <= <<Bin/binary, 0:Y>> ],
-    %F = fun(Elem, Acc) -> <<Acc/bits, (dec(Key1,Key2,Elem)):(Size1)>> end,
     F = fun(Elem, Acc) ->
         Block = bin_to_int(mod_pow(Elem, Key1, Key2)),
         <<Acc/bits, Block:Size1>>
