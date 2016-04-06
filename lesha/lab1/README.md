@@ -1,6 +1,5 @@
-# information-security
+# information-security/lesha/lab1
 
-First lab:
 ```bash
 go run hamming.go md5.go cli.go
 ```
