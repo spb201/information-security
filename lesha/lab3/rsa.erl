@@ -58,6 +58,6 @@ main(_) ->
 
 usage() ->
     io:format("usage:\n"),
-    io:format("escript rsa.erl e [key size] [first key] [second key] [source file] [destination file]"),
-    io:format("escript rsa.erl d [key size] [first key] [second key] [source file] [destination file]").
+    io:format("escript rsa.erl e [key size] [first key] [second key] [source file] [destination file]\n"),
+    io:format("escript rsa.erl d [key size] [first key] [second key] [source file] [destination file]\n").
 

@@ -149,7 +149,8 @@ main = do
     case x of
         "k" -> do
             let y:ys = xs
-            pq <- rndPrimes . (`div` 2) . read $ y
+                primesAry = (`div` 2) . read $ y
+            pq <- rndPrimes primesAry
             let p = fst pq
                 q = snd pq
                 ok = openKey e' p q
