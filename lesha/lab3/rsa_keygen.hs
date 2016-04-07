@@ -49,7 +49,9 @@ rndPrimes bits = do
     fix $ \again -> do
         q <- rndPrime bits
         if p /= q
-            then return (p, q)
+            then if p*q >= 2^(bits*2 - 1)
+                then return (p, q)
+                else again
             else again
 
 
