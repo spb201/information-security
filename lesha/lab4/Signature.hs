@@ -16,43 +16,48 @@ main = do
     let x:xs = args
     case x of
         "keys" -> do
-            let publicKeyFile : privateKeyFile : _ = xs
-            (publicKey, privateKey) <- Asym.generateKeys 256
-            writeFile publicKeyFile (show publicKey)
-            writeFile privateKeyFile (show privateKey)
+            let bytes' : publicKeyFile : privateKeyFile : _ = xs
+                bytes = read bytes'
+            if bytes < 17
+                then putStrLn "Minimum 17 bytes"
+                else do
+                    (publicKey, privateKey) <- Asym.generateKeys (bytes * 8)
+                    writeFile publicKeyFile (show (bytes, publicKey))
+                    writeFile privateKeyFile (show (bytes, privateKey))
         "sign" -> do
             let privateKeyFile : unsignedFile : signedFile : _ = xs
             contents <- B.readFile unsignedFile
             let hash = Hash.hashToInteger . Hash.md5 $ contents
             privateKeyString <- readFile privateKeyFile
-            let privateKey = read privateKeyString
+            let (bytes, privateKey) = read privateKeyString
                 signature = Asym.encrypt privateKey hash
-                signatureString = signatureToByteString signature
+                signatureString = signatureToByteString bytes signature
             B.writeFile signedFile (B.append contents signatureString)
         "check" -> do
             let publicKeyFile : signedFile : _ = xs
             contents <- B.readFile signedFile
             publicKeyString <- readFile publicKeyFile
-            let publicKey = read publicKeyString
+            let (bytes, publicKey) = read publicKeyString
                 len = B.length contents
-                (fileContents, signatureString) = B.splitAt (len - 32) contents
+                (fileContents, signatureString) = B.splitAt (len - bytes) contents
                 hash = Hash.hashToInteger . Hash.md5 $ fileContents
                 signature = byteStringToSignature signatureString
                 hash' = Asym.decrypt publicKey signature
             if hash == hash'
-                then putStrLn "OK"
-                else putStrLn "ERROR"
+                then putStrLn "Signature is valid"
+                else putStrLn "Signature is invalid"
         "unsign" -> do
-            let signedFile : _ = xs
+            let bytes' : signedFile : _ = xs
+                bytes = read bytes'
             withBinaryFile signedFile ReadWriteMode (\handle -> do
                 size <- hFileSize handle
-                hSetFileSize handle (size - 32)
+                hSetFileSize handle (size - bytes)
                 )
 
 
-signatureToByteString :: Integer -> B.ByteString
-signatureToByteString =
-    leftPad 32 0 . B.unfoldr unfoldingFunction
+signatureToByteString :: Int -> Integer -> B.ByteString
+signatureToByteString toSize =
+    leftPad toSize 0 . B.unfoldr unfoldingFunction
   where
     unfoldingFunction a =
         if a > 0
